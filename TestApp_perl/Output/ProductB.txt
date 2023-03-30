@@ -1,0 +1,6 @@
+===============================
+ Product Id:  B
+===============================
+1) "test operation 1"
+2) "Lamination: Product A"
+3) "test operation 3"

@@ -1,0 +1,11 @@
+===============================
+ Product Id:  G
+===============================
+1) "test operation 1"
+2) "test operation 2"
+3) "Pressing: Product B + Product D"
+4) "test operation 4"
+5) "Lamination: Product C"
+6) "test operation 5"
+7) "Lamination: Product C"
+8) "test operation 6"
