@@ -36,11 +36,12 @@ class Receipe:
 
 
     def remove_product(self, product):
+        del product
         self.products.remove(product)
 
 
-    def rename_product(self, product, new_name):
-        product.name = new_name
+    def rename_product(self, product):
+        product.name = input("Enter new name: ")
 
 
     def get_product(self, id):
