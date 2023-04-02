@@ -1,5 +1,10 @@
 
 responses = ["y", "yes", ","]
+n_responses = ["n", "no", "not"]
+decorator = "*--*--*--*--*--*--*--*--*--*--*--*--*"
+decorator2 = "--------------------------------------"
+decorator3 = "**************************************"
+
 
 
 class ReceipeMngr:
@@ -31,32 +36,29 @@ class ReceipeMngr:
     
             
                 
-
-
-
-
-
 class Receipe:
-    def __init__(self):
-        self.products = []
 
     def show_products(self):
-        for product in self.products:
+        print(decorator2)
+        for product in Product.products:
             product.get_info()
-
+        print(decorator2)
+        
     def add_product(self):
-        product = Product()
-        self.products.append(product)
+        thickness = input("Enter thickness: ")
+        material = input("Enter material: ")
+        product = Product(thickness=thickness, material=material)
+        Product.products.append(product)
         return product
 
     def remove_product(self, product):
-        self.products.remove(product)
+        Product.products.remove(product)
 
     def rename_product(self, product):
         product.name = input("Enter new name: ")
 
     def get_product(self, identifier):
-        for product in self.products:
+        for product in Product.products:
             if product.id == identifier or product.name == identifier:
                 return product
         return None
@@ -66,54 +68,94 @@ class Receipe:
             user_inp = input("Do you want to add a new product? (y/n): ")
             if user_inp.lower() in responses:
                 self.add_product()
-                for product in self.products:
+                for product in Product.products:
                     product.get_info()
             else:
                 break
+    
+    def generate_pairs(self, include_list=[]):
+        if len(Product.products) < 2:
+            print("You don't have enough products. Please add more products.")
+            return None, None
+        self.show_products()
+        product1 = None
+        product2 = None
+        while True:
+            product1_id_name = input("Enter name or ID of the first product: ")
+            product1 = self.get_product(product1_id_name)
+            if not product1:
+                print("Product not found. Please try again.")
+            elif product1 in include_list:
+                print("Product already used. Please choose another.")
+            elif product1 not in include_list:
+                break
+
+        while True:
+            product2_id_name = input("Enter name or ID of the second product: ")
+            product2 = self.get_product(product2_id_name)
+            if not product2:
+                print("Product not found. Please try again.")
+            elif product2 in include_list:
+                print("Product already used. Please choose another.")
+            elif product2 not in include_list:
+                break
+        return product1, product2
 
 
-    def operation_step(self):
-        num_pairs = int(input("How many initial product pairs do you want to create? "))
-        if num_pairs * 2 <= len(self.products):
-            for i in range(num_pairs):
-                while True:
-                    product1_id_name = input("Enter name or ID of the first product: ")
-                    product1 = self.get_product(product1_id_name)
-                    if not product1:
-                        print("Product not found. Please try again.")
-                    else:
-                        break
 
-                while True:
-                    product2_id_name = input("Enter name or ID of the second product: ")
-                    product2 = self.get_product(product2_id_name)
-                    if not product2:
-                        print("Product not found. Please try again.")
-                    else:
-                        break
-
-
-                if product1 is not None and product2 is not None:
-                    print("1. Add laminate operation")
-                    print("2. Add pressing operation")
-                    print("3. Add custom operation")
-
-                    op_choice = input("Enter operation choice: ")
+    
                     
-                    if op_choice == "1":
-                        Product.add_op_laminate(product1, product2)
-                    elif op_choice == "2":
-                        Product.add_op_pressing(product1, product2)
-                    elif op_choice == "3":
-                        op_name = input("Enter custom operation name: ")
-                        Product.add_op_custom(op_name)
+    def operation_step(self):
+        step = 1
+        num_pairs = int(input("How many initial product pairs do you want to create? "))
+        if num_pairs * 2 <= len(Product.products):
+            while num_pairs > 0:
+                sub_product_list = Product.products.copy()
+                print(decorator3 + f"\nSTEP {step}\n" + decorator3)
+                print(f"Creating {num_pairs} product pair..." if num_pairs == 1 else f"Creating {num_pairs} product pairs...")
+                for i in range(num_pairs):
+                    print(f"Work on pair {i+1}/{num_pairs}")
+                    unmodified_products = [p for p in sub_product_list if p not in Operations.modified_products]
+                    if len(unmodified_products) < 2:
+                        print("Not enough unmodified products to create a pair. Starting next step.")
+                        break
+                    product1, product2 = self.generate_pairs(unmodified_products)
+                    if product1 is not None and product2 is not None:
+                        print(decorator)
+                        print("1. Add laminate operation")
+                        print("2. Add pressing operation")
+                        print("3. Add custom operation")
+                        print(decorator) 
+                        op_choice = input("Enter operation choice: ")
                         
+                        if op_choice == "1":
+                            Operations.add_op_laminate(product1, product2)
+                        elif op_choice == "2":
+                            Operations.add_op_pressing(product1, product2)
+                        elif op_choice == "3":
+                            op_name = input("Enter custom operation name: ")
+                            Operations.add_op_custom(op_name)
+                            
+                        else:
+                            print("Invalid operation choice.")
+                    
                     else:
-                        print("Invalid operation choice.")
-                else:
-                    print("Product not found.")
-            return True
-
+                        print("Invalid product pair.")
+                        continue
+                        
+                if num_pairs > 1:
+                    num_pairs -= 1
+                step += 1   
+                Operations.modified_products = []
+                
+                if num_pairs > 0:
+                    print(decorator2)
+                    next_step = input("Do you want to continue to the next step? (y/n) ")
+                    if next_step.lower() == 'n':
+                        break
+                    elif next_step.lower() != 'y':
+                        print("Invalid input. Continuing to the next step.")
+                    
         else:
             response = input("You don't have enough products. Do you want to add more? (y/n): ")
             if response.lower() in responses:
@@ -122,17 +164,21 @@ class Receipe:
             else:
                 print("Returning to main menu.")
 
+
   
                 
     def main_menu(self, operation_step):
         while True:
-            print("\nWhat do you want to do with a products?")
+            print(decorator2)
+            print("MAIN MENU")
             print("1. Rename a product")
             print("2. Remove a product")
             print("3. Add a product to product list")
             print("4. Start building a receipe/PCB")
             print("5. Show me a list of products")
-            
+            #print("6. Show me a list of products from Products class")
+            print("10. Exit")
+            print(decorator2)
             choice = input("Enter a number to choose an option: ")
 
             if choice == "1":
@@ -165,6 +211,11 @@ class Receipe:
                 print("\n")
                 input("Press enter key to continue...")              
 
+            
+            elif choice == "10":
+                print("Exiting...")
+                break
+            
             else:
                 print("Invalid choice. Please enter a number between 1 and X.")
 
@@ -174,25 +225,19 @@ class Receipe:
 
 import string
 import random
+import re
 
 class Product:
     
     _next_id = 1  # next avaiable id
     products = []
     
-    def __init__(self, thickness=None, material=None):
-        if thickness is None:
-            self.thickness = input("Enter thickness: ")
-        else:
-            self.thickness = thickness
-        
-        if material is None:
-            self.material = input("Enter material: ")
-        else:
-            self.material = material
+    def __init__(self, thickness, material):
+        self.thickness = thickness
+        self.material = material
         self.name = self.generate_name()
         self.id = self.generate_id()
-        self.products.append(self)
+        #self.products.append(self)
         
         
     def get_info(self):
@@ -216,23 +261,24 @@ class Product:
                 value = input("Enter thickness: ")
         self._thickness = value
     
+    
+
     @property
     def material(self):
         return self._material
 
     @material.setter
     def material(self, value):
+        pattern = r'^[a-zA-Z]+(-[a-zA-Z]+)*$'  # regular expression to match word-word-word format
         while True:
-            if len(value.split()) > 1:
-                print("Invalid value for material. Material must be a single word.")
-            elif not value.isalpha():
-                print("Invalid value for material. Material must contain only letters.")
+            if not re.match(pattern, value):
+                print("Invalid value for material. Material must be in word-word-word format and contain only letters and hyphens.")
             else:
                 self._material = value
                 break
 
-            value = input("Enter material: ")  
-        
+            value = input("Enter material: ")
+
         
        
     def generate_name(self):
@@ -251,32 +297,42 @@ class Product:
         return "".join(random.choice(letters) for i in range(8))
 
     
-    @classmethod    
+    
+    
+    
+    
+class Operations:
+    modified_products = []
+    
+    @classmethod
     def add_op_pressing(cls, product1, product2):
         thickness = product1.thickness + product2.thickness
         material = product1.material + "-" + product2.material
-        new_product = cls(thickness=thickness, material=material)
-        cls.products.append(new_product)
-        cls.products.remove(product1)
-        cls.products.remove(product2)
+        new_product = Product(thickness=thickness, material=material)
+        Product.products.append(new_product)
+        Product.products.remove(product1)
+        Product.products.remove(product2)
         return new_product
 
-    def add_op_laminate(self, product1, product2):
+    @classmethod
+    def add_op_laminate(cls, product1, product2):
         if product1.thickness < product2.thickness:
             product2.thickness += product1.thickness
             product2.material = product1.material + "-" + product2.material
-            self.products.remove(product1)
+            Product.products.remove(product1)
+            print("Pressing operation done.")
             return product2
         else:
             product1.thickness += product2.thickness
             product1.material = product1.material + "-" + product2.material
-            self.products.remove(product2)
+            Product.products.remove(product2)
+            print("Laminate operation done.")
             return product1
 
         
-        
-    def add_op_custom(self, op_name):
-        self.op_name = op_name
+    @classmethod        
+    def add_op_custom(cls, op_name):
+        cls.op_name = op_name
         print(op_name)
     
  
