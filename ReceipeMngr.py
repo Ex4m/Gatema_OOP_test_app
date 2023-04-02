@@ -16,43 +16,159 @@ class ReceipeMngr:
 
     def OnBuildReceipeHandler(self):
         recipe = Receipe()
-        while True:
-            user_inp = input("Do you want to add new product? (y/n): ")
-            if user_inp.lower() in responses:
-                recipe.add_product()
-            else:
-                pass
+        print("""Hello,
+        welcome to the receipe manager. You can create new receipe or load existing one.
+        First, you need to add products to the receipe. You can add as many products as you want.
+        Then you can add operations to the products. You can add as many operations as you want.
+        At first you will be asked to enter thickness and material of the product.
+        """)
+        recipe.init_product_list()
+        recipe.main_menu(recipe.operation_step)
         
+        
+    
+        
+    
+            
+                
+
+
+
 
 
 class Receipe:
     def __init__(self):
         self.products = []
 
+    def show_products(self):
+        for product in self.products:
+            product.get_info()
+
     def add_product(self):
         product = Product()
         self.products.append(product)
         return product
 
-
     def remove_product(self, product):
-        del product
         self.products.remove(product)
-
 
     def rename_product(self, product):
         product.name = input("Enter new name: ")
 
-
-    def get_product(self, id):
+    def get_product(self, identifier):
         for product in self.products:
-            if product.id == id:
+            if product.id == identifier or product.name == identifier:
                 return product
         return None
 
+    def init_product_list(self):
+        while True:
+            user_inp = input("Do you want to add a new product? (y/n): ")
+            if user_inp.lower() in responses:
+                self.add_product()
+                for product in self.products:
+                    product.get_info()
+            else:
+                break
 
 
+    def operation_step(self):
+        num_pairs = int(input("How many initial product pairs do you want to create? "))
+        if num_pairs * 2 <= len(self.products):
+            for i in range(num_pairs):
+                while True:
+                    product1_id_name = input("Enter name or ID of the first product: ")
+                    product1 = self.get_product(product1_id_name)
+                    if not product1:
+                        print("Product not found. Please try again.")
+                    else:
+                        break
 
+                while True:
+                    product2_id_name = input("Enter name or ID of the second product: ")
+                    product2 = self.get_product(product2_id_name)
+                    if not product2:
+                        print("Product not found. Please try again.")
+                    else:
+                        break
+
+
+                if product1 is not None and product2 is not None:
+                    print("1. Add laminate operation")
+                    print("2. Add pressing operation")
+                    print("3. Add custom operation")
+
+                    op_choice = input("Enter operation choice: ")
+                    
+                    if op_choice == "1":
+                        Product.add_op_laminate(product1, product2)
+                    elif op_choice == "2":
+                        Product.add_op_pressing(product1, product2)
+                    elif op_choice == "3":
+                        op_name = input("Enter custom operation name: ")
+                        Product.add_op_custom(op_name)
+                        
+                    else:
+                        print("Invalid operation choice.")
+                else:
+                    print("Product not found.")
+            return True
+
+        else:
+            response = input("You don't have enough products. Do you want to add more? (y/n): ")
+            if response.lower() in responses:
+                self.init_product_list()
+                self.operation_step()
+            else:
+                print("Returning to main menu.")
+
+  
+                
+    def main_menu(self, operation_step):
+        while True:
+            print("\nWhat do you want to do with a products?")
+            print("1. Rename a product")
+            print("2. Remove a product")
+            print("3. Add a product to product list")
+            print("4. Start building a receipe/PCB")
+            print("5. Show me a list of products")
+            
+            choice = input("Enter a number to choose an option: ")
+
+            if choice == "1":
+                id = input("Enter the id of the product you want to rename: ")
+                product = self.get_product(id)
+                if product is None:
+                    print("Product not found")
+                else:
+                    self.rename_product(product)
+
+            elif choice == "2":
+                id = input("Enter the id of the product you want to remove: ")
+                product = self.get_product(id)
+                if product is None:
+                    print("Product not found")
+                else:
+                    self.remove_product(product)
+                    
+
+            elif choice == "3":
+                self.init_product_list()
+
+            
+            elif choice == "4":
+                operation_step()
+                input("Press enter key to continue...")     
+                
+            elif choice == "5":
+                self.show_products()  
+                print("\n")
+                input("Press enter key to continue...")              
+
+            else:
+                print("Invalid choice. Please enter a number between 1 and X.")
+
+    
 
 
 
@@ -60,20 +176,29 @@ import string
 import random
 
 class Product:
-    _instances = []  # list of all instances of the products
-    _next_id = 1  # next avaiable id
-
-    def __init__(self, ):
-        self.id = self.generate_id()
-        self.thickness = input("Enter thickness: ")
-        self.material = input("Enter material: ")
-        self.name = self.generate_name()
-
-        
-        Product._instances.append(self)
-        print(f"id: {self.id}, thickness: {self.thickness}, material: {self.material}, name: {self.name}")
-        
     
+    _next_id = 1  # next avaiable id
+    products = []
+    
+    def __init__(self, thickness=None, material=None):
+        if thickness is None:
+            self.thickness = input("Enter thickness: ")
+        else:
+            self.thickness = thickness
+        
+        if material is None:
+            self.material = input("Enter material: ")
+        else:
+            self.material = material
+        self.name = self.generate_name()
+        self.id = self.generate_id()
+        self.products.append(self)
+        
+        
+    def get_info(self):
+        print(f"id: {self.id}, thickness: {self.thickness}, material: {self.material}, name: {self.name}")
+    
+   
     @property
     def thickness(self):
         return self._thickness
@@ -109,47 +234,54 @@ class Product:
             value = input("Enter material: ")  
         
         
-            
+       
     def generate_name(self):
         alphabet = string.ascii_uppercase
         num_letters = len(alphabet)
-        # projdeme všechny možné kombinace písmena a čísla v názvu produktu
         while True:
-            name = f"Product {alphabet[Product._next_id % num_letters-1]}-{Product._next_id // num_letters + 1}"
+            name = f"{alphabet[Product._next_id % num_letters-1]}_{Product._next_id // num_letters + 1}"
             Product._next_id += 1
-            # if product with same name not in list of all instances, return name
-            if not any(product.name == name for product in Product._instances):
+            if not any(product.name == name for product in self.products):
                 return name
+
+
 
     def generate_id(self):
         letters = string.ascii_uppercase + string.digits
         return "".join(random.choice(letters) for i in range(8))
 
-    def add_op_pressing(self, product1, product2):
+    
+    @classmethod    
+    def add_op_pressing(cls, product1, product2):
         thickness = product1.thickness + product2.thickness
         material = product1.material + "-" + product2.material
-        new_product = Product(thickness, material)
-        self._instances.append(new_product)
-        self._instances.remove(product1)
-        self._instances.remove(product2)
+        new_product = cls(thickness=thickness, material=material)
+        cls.products.append(new_product)
+        cls.products.remove(product1)
+        cls.products.remove(product2)
         return new_product
-            
-    
+
     def add_op_laminate(self, product1, product2):
         if product1.thickness < product2.thickness:
             product2.thickness += product1.thickness
             product2.material = product1.material + "-" + product2.material
-            del product1 #self._instances.remove(product1)
+            self.products.remove(product1)
             return product2
         else:
             product1.thickness += product2.thickness
             product1.material = product1.material + "-" + product2.material
-            del product2 #self._instances.remove(product2)
+            self.products.remove(product2)
             return product1
+
         
         
-    def add_op_custom(self):
-        pass
+    def add_op_custom(self, op_name):
+        self.op_name = op_name
+        print(op_name)
+    
+ 
+
+     
     
             
     
