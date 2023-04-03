@@ -5,30 +5,47 @@ decorator = "*--*--*--*--*--*--*--*--*--*--*--*--*"
 decorator2 = "--------------------------------------"
 decorator3 = "**************************************"
 
-
+import pickle
 
 class ReceipeMngr:
-    
+    def __init__(self):
+        self.recipe = Receipe()
     
     def Build(self):
         raise NotImplementedError("Build is not implemented")
 
-    def Load(self):
-        raise NotImplementedError("Load is not implemented")
+    def load_operation_state(self):
+        with open("operation_progress.pickle", "rb") as f:
+            data = pickle.load(f)
+        self.recipe.step = data["step"]
+        self.recipe.num_pairs = data["num_pairs"]
+        for p_data in data["products"]:
+            product = Product(p_data["name"], p_data["id"], p_data["thickness"], p_data["material"])
+            product.was_used = p_data["was_used"]
 
-    def Store(self):
-        raise NotImplementedError("Store is not implemented")
+    def save_operation_state(self):
+        with open("operation_progress.pickle", "wb") as f:
+            pickle.dump({
+                "step": self.recipe.step,
+                "num_pairs": self.recipe.num_pairs,
+                "products": [
+                    {"name": p.name, "id": p.id, "thickness": p.thickness, "material": p.material, "was_used": p.was_used}
+                    for p in Product.products
+                ]
+            }, f)
+        print("Operation progress saved.")
 
     def OnBuildReceipeHandler(self):
-        recipe = Receipe()
+        
         print("""Hello,
         welcome to the receipe manager. You can create new receipe or load existing one.
         First, you need to add products to the receipe. You can add as many products as you want.
         Then you can add operations to the products. You can add as many operations as you want.
         At first you will be asked to enter thickness and material of the product.
         """)
-        recipe.init_product_list()
-        recipe.main_menu(recipe.operation_step)
+        self.recipe.init_product_list()
+        self.recipe.main_menu(self.recipe.operation_step)
+
         
         
         
@@ -36,7 +53,15 @@ class ReceipeMngr:
             
                 
 class Receipe:
-
+    def __init__(self):
+        self.step = 1
+        self.num_pairs = None
+        self.sub_product_list = []
+        self.product_pairs = []
+        self.current_pair_index = 0
+        self.current_product_index = 0
+        self.unmodified_products = []
+        
     def show_products(self):
         print(decorator2)
         for product in Product.products:
@@ -109,83 +134,97 @@ class Receipe:
                     break
         return product1, product2
 
-
-
-
+    # function for user input of number of pairs to be created and only possitive integers, else ask for input again
+    def get_num_pairs(self):
+        while True:
+            try:
+                self.num_pairs = int(input("How many initial product pairs do you want to create? "))
+                if self.num_pairs > 0:
+                    return self.num_pairs
+                else:
+                    print("Please enter a positive integer.")
+            except ValueError:
+                print("Please enter a positive integer.")
+                
+            if self.num_pairs * 2 <= len(Product.products):
+                return self.num_pairs
+            else:
+                response = input("You don't have enough products. Do you want to add more? (y/n): ")
+                if response.lower() in responses:
+                    self.init_product_list()
+                    self.operation_step()
+                else:
+                    print("Returning to main menu.")       
     
                     
     def operation_step(self):
-        step = 1
-        num_pairs = int(input("How many initial product pairs do you want to create? "))
-        if num_pairs * 2 <= len(Product.products):
-            while num_pairs > 0:
-                #Product.reset_used_products = lambda: [setattr(p, "was_used", False) for p in Product.products]
-                sub_product_list = Product.products.copy()
-                print(decorator3 + f"\nSTEP {step}\n" + decorator3)
-                print(f"Creating {num_pairs} product pair..." if num_pairs == 1 else f"Creating {num_pairs} product pairs...")
-                for i in range(num_pairs):
-                    print(decorator2)
-                    print(f"Work on pair {i+1}/{num_pairs}")
-                    unmodified_products = [p for p in sub_product_list if not p.was_used]
-                    if len(unmodified_products) < 2:
-                        print("Not enough unmodified products to create a pair. Returning to main menu.")
-                        break
-                    product1, product2 = self.generate_pairs(unmodified_products)
-                    if product1 is not None and product2 is not None:
-                        print(decorator)
-                        print("1. Add laminate operation")
-                        print("2. Add pressing operation")
-                        print("3. Add custom operation")
-                        print(decorator) 
-                        op_choice = input("Enter operation choice: ")
-                        
-                        if op_choice == "1":
-                            Operations.add_op_laminate(product1, product2)
-                        elif op_choice == "2":
-                            Operations.add_op_pressing(product1, product2)
-                        elif op_choice == "3":
-                            op_name = input("Enter custom operation name: ")
-                            Operations.add_op_custom(op_name)
-                            
-                        else:
-                            print("Invalid operation choice.")
-                            
-                        # Set was_used to True for both products
-                        product1.was_used = True
-                        product2.was_used = True
+        self.num_pairs = self.get_num_pairs()
+        while self.num_pairs > 0:
+            self.sub_product_list = Product.products.copy()
+            print(decorator3 + f"\nSTEP {self.step}\n" + decorator3)
+            print(f"Creating {self.num_pairs} product pair..." if self.num_pairs == 1 else f"Creating {self.num_pairs} product pairs...")
+            for i in range(self.num_pairs):
+                print(decorator2)
+                print(f"Work on pair {i+1}/{self.num_pairs}")
+                self.unmodified_products = [p for p in self.sub_product_list if not p.was_used]
+                if len(self.unmodified_products) < 2:
+                    print("Not enough unmodified products to create a pair. Returning to main menu.")
+                    break
+                product1, product2 = self.generate_pairs(self.unmodified_products)
+                if product1 is not None and product2 is not None:
+                    print(decorator)
+                    print("1. Add laminate operation")
+                    print("2. Add pressing operation")
+                    print("3. Add custom operation")
+                    print(decorator) 
+                    op_choice = input("Enter operation choice: ")
                     
+                    if op_choice == "1":
+                        Operations.add_op_laminate(product1, product2)
+                    elif op_choice == "2":
+                        Operations.add_op_pressing(product1, product2)
+                    elif op_choice == "3":
+                        op_name = input("Enter custom operation name: ")
+                        Operations.add_op_custom(op_name)
+                        
                     else:
-                        print("Invalid product pair.")
-                        continue
-                for product in Product.products:
-                    product.was_used = False                        
-                if num_pairs > 1:
-                    num_pairs -= 1
-                step += 1   
-                print(decorator3)
-                print("Current products (after operation step)")
-                self.show_products()
-                #print(f"Number of pairs left: {num_pairs}")
-                if num_pairs >= 0:
-                    print(decorator2)
-                    if len(Product.products) <= 1:
-                        print("OPERATION FINISHED, Returning to main menu")
-                        break
-                    next_step = input("Do you want to continue to the next step? (y/n) ")
-                    if next_step.lower() in n_responses:
-                        break
-                    elif next_step.lower() not in n_responses and next_step.lower() not in responses:
-                        print("Invalid input. Continuing to the next step.")
-                    else:
-                        print("Continuing to the next step.")   
+                        print("Invalid operation choice.")
+                        
+                    # Set was_used to True for both products
+                    product1.was_used = True
+                    product2.was_used = True
+                
+                else:
+                    print("Invalid product pair.")
+                    continue
+            for product in Product.products:
+                product.was_used = False                        
+            if self.num_pairs > 1:
+                self.num_pairs -= 1
+            self.step += 1   
+            print(decorator3)
+            print("Current products (after operation step)")
+            self.show_products()
+            #print(f"Number of pairs left: {num_pairs}")
+            if self.num_pairs >= 0:
+                print(decorator2)
+                if len(Product.products) <= 1:
+                    print("OPERATION FINISHED, Returning to main menu")
+                    break
+                next_step = input("Do you want to continue to the next step? (y/n) ")
+                if next_step.lower() in n_responses:
+                    break
+                elif next_step.lower() not in n_responses and next_step.lower() not in responses:
+                    print("Invalid input. Continuing to the next step.")
+                else:
+                    print("Continuing to the next step.")   
                                 
-        else:
-            response = input("You don't have enough products. Do you want to add more? (y/n): ")
-            if response.lower() in responses:
-                self.init_product_list()
-                self.operation_step()
-            else:
-                print("Returning to main menu.")
+        
+    
+    
+    
+    
+    
 
 
   
@@ -197,9 +236,10 @@ class Receipe:
             print("1. Rename a product")
             print("2. Remove a product")
             print("3. Add a product to product list")
-            print("4. Start building a receipe/PCB")
+            print("4. *Start building a receipe/PCB*")
             print("5. Show me a list of products")
-            #print("6. Show me a list of products from Products class")
+            print("6. Save operation progress to file")
+            print("7. Load operation progress from file")
             print("10. Exit")
             print(decorator2)
             choice = input("Enter a number to choose an option: ")
@@ -234,6 +274,14 @@ class Receipe:
                 print("\n")
                 input("Press enter key to continue...")              
 
+            elif choice == "6" or choice == "7":
+                RcpMngr = ReceipeMngr()
+                if choice == "6":
+                    RcpMngr.save_operation_state()
+                    input("Press enter key to continue...")
+                else:
+                    RcpMngr.load_operation_state()
+                    input("Press enter key to continue...")
             
             elif choice == "10":
                 print("Exiting...")
@@ -263,11 +311,12 @@ class Product:
         self.was_used = False
         #self.products.append(self)
         
-        
     def get_info(self):
-        print(f"id: {self.id}, thickness: {self.thickness}, material: {self.material}, name: {self.name}, used this step: {self.was_used}")
+        print(f"id: {self.id_prop}, thickness: {self.thickness}, material: {self.material}, name: {self.name_prop}, used this step: {self.was_used}")
     
    
+
+    
     @property
     def thickness(self):
         return self._thickness
