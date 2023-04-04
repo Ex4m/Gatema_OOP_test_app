@@ -9,42 +9,43 @@ import pickle
 
 class ReceipeMngr:
     def __init__(self):
-        self.recipe = Receipe()
+        self.receipe = Receipe()
     
     def Build(self):
         raise NotImplementedError("Build is not implemented")
 
-    def load_operation_state(self):
-        with open("operation_progress.pickle", "rb") as f:
-            data = pickle.load(f)
-        self.recipe.step = data["step"]
-        self.recipe.num_pairs = data["num_pairs"]
-        for p_data in data["products"]:
-            product = Product(p_data["name"], p_data["id"], p_data["thickness"], p_data["material"])
-            product.was_used = p_data["was_used"]
-
-    def save_operation_state(self):
-        with open("operation_progress.pickle", "wb") as f:
-            pickle.dump({
-                "step": self.recipe.step,
-                "num_pairs": self.recipe.num_pairs,
-                "products": [
-                    {"name": p.name, "id": p.id, "thickness": p.thickness, "material": p.material, "was_used": p.was_used}
-                    for p in Product.products
-                ]
-            }, f)
-        print("Operation progress saved.")
-
+    def save_operation_state(self, file_name):
+        data = {
+            "receipe": self.receipe.to_dict(),
+            "products": [p.to_dict() for p in Product.products]    
+            }
+        print(data) 
+        with open(file_name, 'wb') as file:
+            pickle.dump(data, file)
+            print("Operation progress saved.")
+    
+    def load_operation_state(self, file_name):
+        with open(file_name, 'rb') as file:
+            data = pickle.load(file)
+            print("Operation progress loaded.")
+        # load receipe
+        Receipe.from_dict(data["receipe"], self.receipe)
+        # load products
+        Product.products = []
+        for product_dict in data["products"]:
+            product = Product.from_dict(product_dict)
+            Product.products.append(product)
+    
     def OnBuildReceipeHandler(self):
-        
-        print("""Hello,
-        welcome to the receipe manager. You can create new receipe or load existing one.
-        First, you need to add products to the receipe. You can add as many products as you want.
-        Then you can add operations to the products. You can add as many operations as you want.
-        At first you will be asked to enter thickness and material of the product.
-        """)
-        self.recipe.init_product_list()
-        self.recipe.main_menu(self.recipe.operation_step)
+        print("""
+Hello,
+welcome to the receipe manager. You can create new receipe or load existing one.
+First, you need to add products to the receipe. You can add as many products as you want.
+Then you can add operations to the products. You can add as many operations as you want.
+At first you will be asked to enter thickness and material of the product.
+""")
+        self.receipe.init_product_list()
+        self.receipe.main_menu()
 
         
         
@@ -58,10 +59,8 @@ class Receipe:
         self.num_pairs = None
         self.sub_product_list = []
         self.product_pairs = []
-        self.current_pair_index = 0
-        self.current_product_index = 0
         self.unmodified_products = []
-        
+            
     def show_products(self):
         print(decorator2)
         for product in Product.products:
@@ -95,7 +94,7 @@ class Receipe:
 
     def get_product(self, identifier):
         for product in Product.products:
-            if product.id == identifier or product.name == identifier:
+            if product._id == identifier or product._name == identifier:
                 return product
         return None
 
@@ -133,33 +132,30 @@ class Receipe:
                         product2 = product
                     break
         return product1, product2
-
-    # function for user input of number of pairs to be created and only possitive integers, else ask for input again
-    def get_num_pairs(self):
+    
+    # function returning num_pairs based on user input, but not more than half of the products
+    def inp_num_pairs(self):
         while True:
             try:
                 self.num_pairs = int(input("How many initial product pairs do you want to create? "))
                 if self.num_pairs > 0:
-                    return self.num_pairs
+                    if self.num_pairs * 2 <= len(Product.products):
+                        return self.num_pairs
+                    else:
+                        response = input("You don't have enough products. Do you want to add more? (y/n): ")
+                        if response.lower() in responses:
+                            self.init_product_list()
+                            self.operation_step()
+                        else:
+                            print("Returning to main menu.")   
                 else:
                     print("Please enter a positive integer.")
             except ValueError:
                 print("Please enter a positive integer.")
-                
-            if self.num_pairs * 2 <= len(Product.products):
-                return self.num_pairs
-            else:
-                response = input("You don't have enough products. Do you want to add more? (y/n): ")
-                if response.lower() in responses:
-                    self.init_product_list()
-                    self.operation_step()
-                else:
-                    print("Returning to main menu.")       
-    
                     
     def operation_step(self):
-        self.num_pairs = self.get_num_pairs()
-        while self.num_pairs > 0:
+        while True:
+            self.num_pairs = self.inp_num_pairs()
             self.sub_product_list = Product.products.copy()
             print(decorator3 + f"\nSTEP {self.step}\n" + decorator3)
             print(f"Creating {self.num_pairs} product pair..." if self.num_pairs == 1 else f"Creating {self.num_pairs} product pairs...")
@@ -186,21 +182,16 @@ class Receipe:
                     elif op_choice == "3":
                         op_name = input("Enter custom operation name: ")
                         Operations.add_op_custom(op_name)
-                        
                     else:
-                        print("Invalid operation choice.")
-                        
+                        print("Invalid operation choice.") 
                     # Set was_used to True for both products
                     product1.was_used = True
                     product2.was_used = True
-                
                 else:
                     print("Invalid product pair.")
                     continue
             for product in Product.products:
                 product.was_used = False                        
-            if self.num_pairs > 1:
-                self.num_pairs -= 1
             self.step += 1   
             print(decorator3)
             print("Current products (after operation step)")
@@ -213,6 +204,7 @@ class Receipe:
                     break
                 next_step = input("Do you want to continue to the next step? (y/n) ")
                 if next_step.lower() in n_responses:
+                    print("Returning to main menu.")
                     break
                 elif next_step.lower() not in n_responses and next_step.lower() not in responses:
                     print("Invalid input. Continuing to the next step.")
@@ -221,15 +213,8 @@ class Receipe:
                                 
         
     
-    
-    
-    
-    
-
-
-  
-                
-    def main_menu(self, operation_step):
+            
+    def main_menu(self):
         while True:
             print(decorator2)
             print("MAIN MENU")
@@ -240,6 +225,7 @@ class Receipe:
             print("5. Show me a list of products")
             print("6. Save operation progress to file")
             print("7. Load operation progress from file")
+            print("8. TEST step")
             print("10. Exit")
             print(decorator2)
             choice = input("Enter a number to choose an option: ")
@@ -260,13 +246,12 @@ class Receipe:
                 else:
                     self.remove_product(product)
                     
-
             elif choice == "3":
                 self.init_product_list()
 
             
             elif choice == "4":
-                operation_step()
+                self.operation_step()
                 input("Press enter key to continue...")     
                 
             elif choice == "5":
@@ -274,15 +259,19 @@ class Receipe:
                 print("\n")
                 input("Press enter key to continue...")              
 
-            elif choice == "6" or choice == "7":
-                RcpMngr = ReceipeMngr()
-                if choice == "6":
-                    RcpMngr.save_operation_state()
-                    input("Press enter key to continue...")
-                else:
-                    RcpMngr.load_operation_state()
-                    input("Press enter key to continue...")
-            
+            elif choice == "6": 
+                receipe_manager.save_operation_state("Products.pickle")
+                input("Press enter key to continue...")
+                
+            elif choice == "7":
+                receipe_manager.load_operation_state("Products.pickle")
+                input("Press enter key to continue...")
+                    
+            elif choice == "8":
+                print(self.step)
+                print("\n")
+                print(self.to_dict())
+                
             elif choice == "10":
                 print("Exiting...")
                 break
@@ -290,33 +279,60 @@ class Receipe:
             else:
                 print("Invalid choice. Please enter a number between 1 and X.")
 
+    def to_dict(self):
+        print(self.step)
+        return {
+            "step": self.step,
+            "num_pairs": self.num_pairs,
+            "sub_product_list": self.sub_product_list,
+            "product_pairs": self.product_pairs,
+            "unmodified_products": self.unmodified_products
+        }
+        
     
+    @staticmethod
+    def from_dict(data, receipe):
+        receipe.step = data["step"]
+        receipe.num_pairs = data["num_pairs"]
+        receipe.sub_product_list = data["sub_product_list"]
+        receipe.product_pairs = data["product_pairs"]
+        receipe.unmodified_products = data["unmodified_products"]
+        print(receipe.step)
+        
+    
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        return state
+    
+    def __setstate__(self, state):
+        self.__dict__.update(state)
 
 
 
 import string
 import random
 import re
-
+    
+    
+    
+    
 class Product:
     
     _next_id = 1  # next avaiable id
     products = []
     
     def __init__(self, thickness, material):
-        self.thickness = thickness
-        self.material = material
-        self.name = self.generate_name()
-        self.id = self.generate_id()
-        self.was_used = False
-        #self.products.append(self)
+            self.thickness = thickness
+            self.material = material
+            self._name = self.generate_name()
+            self._id = self.generate_id()
+            self.was_used = False
+            #self.products.append(self)
         
     def get_info(self):
-        print(f"id: {self.id_prop}, thickness: {self.thickness}, material: {self.material}, name: {self.name_prop}, used this step: {self.was_used}")
+        print(f"id: {self._id}, thickness: {self.thickness}, material: {self.material}, name: {self._name}, used this step: {self.was_used}")
     
-   
-
-    
+        
     @property
     def thickness(self):
         return self._thickness
@@ -352,26 +368,42 @@ class Product:
 
             value = input("Enter material: ")
 
-        
-       
     def generate_name(self):
         alphabet = string.ascii_uppercase
         num_letters = len(alphabet)
         while True:
             name = f"{alphabet[Product._next_id % num_letters-1]}_{Product._next_id // num_letters + 1}"
             Product._next_id += 1
-            if not any(product.name == name for product in self.products):
+            if not any(product._name == name for product in self.products):
                 return name
-
 
 
     def generate_id(self):
         letters = string.ascii_uppercase + string.digits
-        return "".join(random.choice(letters) for i in range(8))
+        while True:
+            new_id = "".join(random.choice(letters) for i in range(8))
+            if not any(product._id == new_id for product in Product.products):
+                return new_id
 
-    
-    
-    
+    def to_dict(self):
+        return {
+            "thickness": self.thickness,
+            "material": self.material,
+            "_name": self._name,
+            "_id": self._id,
+            "was_used": self.was_used
+        }
+
+    @classmethod
+    def from_dict(cls, product_dict):
+        product = cls(thickness=product_dict["thickness"], material=product_dict["material"])
+        product._name = product_dict["_name"]
+        product._id = product_dict["_id"]
+        product.was_used = product_dict["was_used"]
+        return product
+
+
+        
     
     
 class Operations:
@@ -429,8 +461,8 @@ prod3 = Product.add_op_pressing(Product, prod1, product5 )"""
 
 
 
-recipe_manager = ReceipeMngr()
-recipe_manager.OnBuildReceipeHandler()
+receipe_manager = ReceipeMngr()
+receipe_manager.OnBuildReceipeHandler()
 
 
 
