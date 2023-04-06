@@ -178,7 +178,8 @@ class Receipe:
         Product.products.remove(product)
 
     def rename_product(self, product):
-        product.name = input("Enter new name: ")
+        product._name = input("Enter new name: ")
+        return product._name
 
     def get_product(self, identifier):
         for product in Product.products:
@@ -515,7 +516,7 @@ class ReceipeTester(NodeMixin):
         return root_node
 
         
-    # funkce která vytiskne celkový počet operací typu „lisování“ v nodes_list třídy Receipe
+ 
     
     
     def print_press_count(self):
@@ -540,15 +541,6 @@ class ReceipeTester(NodeMixin):
                 break
         
 
-        
-        
-        """related_nodes = []
-        for node in self.receipe.nodes_list:
-            if isinstance(node, Product) and node != self.receipe.product:
-                if node.parent == self.receipe.product or node.parent == self.receipe.product.parent:
-                    related_nodes.append(node)
-        return related_nodes"""
-       
     
     def remove_op_by_order(self, product_id, op_order):
         #Před vytisknutím postupu může být zavolána tato metoda, která modifikuje nadefinovaný postup tak, že odstraní jednu operaci z konkrétního postupu podle pořadí operace.
