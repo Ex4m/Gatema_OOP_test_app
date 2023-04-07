@@ -112,7 +112,7 @@ At first you will be asked to enter thickness and material of the product.
                 input("Press enter key to continue...")
                     
             elif choice == "8":
-                self.receipe_tester.print_receipe_tree()
+                self.receipe_tester.print_product_tree()
                 input("Press enter key to continue...")  
             
             elif choice == "9":
@@ -152,6 +152,11 @@ class Receipe:
     def show_products(self):
         print(decorator2)
         for product in Product.products:
+            product.get_info()
+        print(decorator2)
+        print(decorator3)
+        print(decorator2)
+        for product in Product.history:
             product.get_info()
         print(decorator2)
     
@@ -256,11 +261,11 @@ class Receipe:
             if self.want_quit:
                 break
             self.sub_product_list = Product.products.copy()
-            new_step_node = Node(f"Step {self.step}", parent=root_node)
-            self.nodes_list.append(new_step_node)
+            #new_step_node = Node(f"Step {self.step}", parent=root_node)
+            #self.nodes_list.append(new_step_node)
             for i in range(self.num_pairs):
-                new_work_node = Node(f"Work on pair {i+1}/{self.num_pairs}", parent=new_step_node)
-                self.nodes_list.append(new_work_node)
+                #new_work_node = Node(f"Work on pair {i+1}/{self.num_pairs}", parent=new_step_node)
+                #self.nodes_list.append(new_work_node)
                 self.unmodified_products = [p for p in self.sub_product_list if not p.was_used]
                 if len(self.unmodified_products) < 2:
                     print("Not enough unmodified products to create a pair. Returning to main menu.")
@@ -284,8 +289,8 @@ class Receipe:
                     else:
                         print("Invalid operation choice.")
                         continue
-                    new_op_node = Node(f"{new_op_name} ({product1._name}-{product2._name})", parent=new_work_node)
-                    self.nodes_list.append(new_op_node)
+                    #new_op_node = Node(f"{new_op_name} ({product1._name}-{product2._name})", parent=new_work_node)
+                    #self.nodes_list.append(new_op_node)
                     # Set was_used to True for both products
                     product1.was_used = True
                     product2.was_used = True
@@ -355,6 +360,7 @@ class Product(NodeMixin):
     
     _next_id = 1  # next avaiable id
     products = []
+    history = []
     
     def __init__(self, thickness, material):
             self.thickness = thickness
@@ -362,12 +368,15 @@ class Product(NodeMixin):
             self._name = self.generate_name()
             self._id = self.generate_id()
             self.was_used = False
-            self.history = []
+            self.child = None
+            self.parent = None
             #self.products.append(self)
         
     def get_info(self):
-        print(f"id: {self._id}, thickness: {self.thickness}, material: {self.material}, name: {self._name}")
+        print(f"id: {self._id}, thickness: {self.thickness}, material: {self.material}, name: {self._name}, child: {self.child}, parent: {self.parent}")
     
+    def set_child(self, child):
+        self.child = child
         
     @property
     def thickness(self):
@@ -443,8 +452,6 @@ class Product(NodeMixin):
     
     
 class Operations(NodeMixin):
-    def __init__(self):
-        self.op_nodes = []
         
     @classmethod
     def add_op_pressing(cls, product1, product2):
@@ -452,10 +459,11 @@ class Operations(NodeMixin):
         material = product1.material + "-" + product2.material
         new_product = Product(thickness=thickness, material=material)
         new_product.was_used = True
-
         Product.products.append(new_product)
-        Product.products.remove(product1)
-        Product.products.remove(product2)
+        for i in (product1,product2):
+            new_product.set_child(i)
+            Product.history.append(i)
+            Product.products.remove(i)
         print("Pressing operation done.")
         return new_product
     
@@ -465,16 +473,16 @@ class Operations(NodeMixin):
             product2.thickness += product1.thickness
             product2.material = product1.material + "-" + product2.material
             product2.was_used = True
-            product1.parent = product2
-            Product.products.remove(product1)
+            product2.set_child(product1)
+            Product.history.append(Product.products.remove(product1))
             print("Laminate operation done.")
             return product2
         else:
             product1.thickness += product2.thickness
             product1.material = product1.material + "-" + product2.material
             product1.was_used = True
-            product2.parent = product1
-            Product.products.remove(product2)
+            product1.set_child(product2)
+            Product.history.append(Product.products.remove(product2))
             print("Laminate operation done.")
             return product1
 
@@ -492,18 +500,29 @@ class Operations(NodeMixin):
 
 class ReceipeTester(NodeMixin):
     def __init__(self, receipe):
-        self.children = []
         self.receipe = receipe
 
         
-    def print_receipe_tree(self):
-        root_node = self.create_tree()
+    #def print_receipe_tree(self):
+        """root_node = self.create_tree()
         for pre, fill, node in RenderTree(root_node):
+            print(f"{pre}{node.name}")"""
+    
+    def print_product_tree(self):
+        if len(Product.products) > 1:
+            print("Operation process not yet finneshed. Please finish the operation process before printing the tree.")
+            return
+        
+        root_node = self.create_tree()
+        for pre, _, node in RenderTree(root_node):
             print(f"{pre}{node.name}")
+            print(f"{pre} parent: {node.parent.name if node.parent else None}")
+            print(f"{pre} children: {[child.name for child in node.children]}\n")
 
+    
     def create_tree(self):    
-        root_node = self.receipe.root_node
-        for node in self.receipe.nodes_list:
+        root_node = Product.products[0]
+        for node in Product.history:
             parent_node = root_node
             for ancestor in node.ancestors:
                 for child in parent_node.children:
