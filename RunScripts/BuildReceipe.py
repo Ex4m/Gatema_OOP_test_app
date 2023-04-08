@@ -6,11 +6,12 @@ decorator2 = "--------------------------------------"
 decorator3 = "**************************************"
 
 import pickle
-from anytree import Node, RenderTree, NodeMixin
+from anytree import Node, RenderTree, NodeMixin, iterators
 import string
 import random
 import re
-   
+
+
 
 class ReceipeMngr:
     def __init__(self):
@@ -21,19 +22,19 @@ class ReceipeMngr:
         raise NotImplementedError("Build is not implemented")
 
     def save_operation_state(self, file_name):
+        self.receipe_tester.root_node = self.receipe_tester.create_tree()  # aktualizace root_node
         data = {
             "receipe": self.receipe.to_dict(),
-            "products": [p.to_dict() for p in Product.products]    
-            }
-        print(data) 
+            "products": [p.to_dict() for p in Product.products],
+            "tree_root": pickle.dumps(self.receipe_tester.root_node)  # použití aktualizovaného root_node
+        }
         with open(file_name, 'wb') as file:
             pickle.dump(data, file)
-            print("Operation progress saved.")
-    
+        print("Operation progress saved.")
+
     def load_operation_state(self, file_name):
         with open(file_name, 'rb') as file:
             data = pickle.load(file)
-            print("Operation progress loaded.")
         # load receipe
         Receipe.from_dict(data["receipe"], self.receipe)
         # load products
@@ -41,7 +42,10 @@ class ReceipeMngr:
         for product_dict in data["products"]:
             product = Product.from_dict(product_dict)
             Product.products.append(product)
-
+        # load nodes
+        root_node = pickle.loads(data["tree_root"])
+        self.receipe_tester.root_node = root_node
+        print("Operation progress loaded.")
     
     def OnBuildReceipeHandler(self):
         print("""
@@ -154,12 +158,7 @@ class Receipe:
         for product in Product.products:
             product.get_info()
         print(decorator2)
-        print(decorator3)
-        print(decorator2)
-        for product in Product.history:
-            product.get_info()
-        print(decorator2)
-    
+        
     def show_sub_products(self, unmodified_products):
         if len(Product.products) == 0:
             print("No products available.")
@@ -183,12 +182,12 @@ class Receipe:
         Product.products.remove(product)
 
     def rename_product(self, product):
-        product._name = input("Enter new name: ")
-        return product._name
+        product.name = input("Enter new name: ")
+        return product.name
 
     def get_product(self, identifier):
         for product in Product.products:
-            if product._id == identifier or product._name == identifier:
+            if product._id == identifier or product.name == identifier:
                 return product
         return None
 
@@ -304,7 +303,7 @@ class Receipe:
             print("Current products (after operation step)")
             self.show_products()
             if len(Product.products) <= 1:
-                final_node = Node(f"Final Product: {Product.products[0]._name}")
+                final_node = Node(f"Final Product: {Product.products[0].name}")
                 self.nodes_list.append(final_node)
                 print("OPERATION FINISHED, Returning to main menu")
                 break
@@ -365,7 +364,7 @@ class Product(NodeMixin):
     def __init__(self, thickness, material):
             self.thickness = thickness
             self.material = material
-            self._name = self.generate_name()
+            self.name = self.generate_name()
             self._id = self.generate_id()
             self.was_used = False
             self.child = None
@@ -373,10 +372,11 @@ class Product(NodeMixin):
             #self.products.append(self)
         
     def get_info(self):
-        print(f"id: {self._id}, thickness: {self.thickness}, material: {self.material}, name: {self._name}, child: {self.child}, parent: {self.parent}")
+        print(f"id: {self._id}, thickness: {self.thickness}, material: {self.material}, name: {self.name}")
     
     def set_child(self, child):
         self.child = child
+        child.parent = self
         
     @property
     def thickness(self):
@@ -419,7 +419,7 @@ class Product(NodeMixin):
         while True:
             name = f"{alphabet[Product._next_id % num_letters-1]}_{Product._next_id // num_letters + 1}"
             Product._next_id += 1
-            if not any(product._name == name for product in self.products):
+            if not any(product.name == name for product in self.products):
                 return name
 
 
@@ -434,7 +434,7 @@ class Product(NodeMixin):
         return {
             "thickness": self.thickness,
             "material": self.material,
-            "_name": self._name,
+            "name": self.name,
             "_id": self._id,
             "was_used": self.was_used
         }
@@ -442,7 +442,7 @@ class Product(NodeMixin):
     @classmethod
     def from_dict(cls, product_dict):
         product = cls(thickness=product_dict["thickness"], material=product_dict["material"])
-        product._name = product_dict["_name"]
+        product.name = product_dict["name"]
         product._id = product_dict["_id"]
         product.was_used = product_dict["was_used"]
         return product
@@ -474,7 +474,8 @@ class Operations(NodeMixin):
             product2.material = product1.material + "-" + product2.material
             product2.was_used = True
             product2.set_child(product1)
-            Product.history.append(Product.products.remove(product1))
+            Product.history.append(product1)
+            Product.products.remove(product1)
             print("Laminate operation done.")
             return product2
         else:
@@ -482,7 +483,8 @@ class Operations(NodeMixin):
             product1.material = product1.material + "-" + product2.material
             product1.was_used = True
             product1.set_child(product2)
-            Product.history.append(Product.products.remove(product2))
+            Product.history.append(product2)
+            Product.products.remove(product2)
             print("Laminate operation done.")
             return product1
 
@@ -501,41 +503,56 @@ class Operations(NodeMixin):
 class ReceipeTester(NodeMixin):
     def __init__(self, receipe):
         self.receipe = receipe
-
+        self.root_node = None
+        self.preorderiter = iterators.PreOrderIter(self.root_node)
         
-    #def print_receipe_tree(self):
-        """root_node = self.create_tree()
-        for pre, fill, node in RenderTree(root_node):
-            print(f"{pre}{node.name}")"""
-    
     def print_product_tree(self):
         if len(Product.products) > 1:
-            print("Operation process not yet finneshed. Please finish the operation process before printing the tree.")
+            print("Operation process not yet finished. Please finish the operation process before printing the tree.")
             return
-        
-        root_node = self.create_tree()
-        for pre, _, node in RenderTree(root_node):
-            print(f"{pre}{node.name}")
-            print(f"{pre} parent: {node.parent.name if node.parent else None}")
-            print(f"{pre} children: {[child.name for child in node.children]}\n")
+            
+        que = input("Do you want to print the full tree? (y/n): ")
+        self.root_node = self.create_tree()
+        if que in responses:
+            for pre, _, node in RenderTree(self.root_node):
+                print(f"{pre}{node.name}")
+                print(f"{pre} parent: {node.parent.name if node.parent else None}")
+                print(f"{pre} children: {[child.name for child in node.children]}\n")
+        else:
+            for pre, _, node in RenderTree(self.root_node):
+                print(f"{pre}{node.name}")
 
     
-    def create_tree(self):    
-        root_node = Product.products[0]
-        for node in Product.history:
-            parent_node = root_node
-            for ancestor in node.ancestors:
-                for child in parent_node.children:
-                    if child.name == ancestor.name:
-                        parent_node = child
-                        break
-                else:
-                    parent_node = Node(ancestor.name, parent=parent_node)
-            Node(node.name, parent=parent_node)
-        return root_node
+    def create_tree(self):
+        if self.root_node is None:
+            # find the root node in the Product.products list
+            root_product = next((p for p in Product.products if p.name == self.root_node), None)
+            if not root_product:
+                print(f"Root product '{self.root_node}' not found in Product.products")
+                return None
+            
+            # create the root node and add it to the tree
+            self.root_node = Node(root_product.name)
+            
+            # create the rest of the nodes and add them to the tree
+            for node in Product.history:
+                # skip the root node since we already added it
+                if node.name == self.root_node:
+                    continue
+                
+                parent_node = self.root_node
+                for ancestor in node.ancestors:
+                    for child in parent_node.children:
+                        if child.name == ancestor.name:
+                            parent_node = child
+                            break
+                    else:
+                        parent_node = Node(ancestor.name, parent=parent_node)
+                Node(node.name, parent=parent_node)
+        return self.root_node
 
-        
- 
+
+
     
     
     def print_press_count(self):
@@ -549,15 +566,20 @@ class ReceipeTester(NodeMixin):
         pass
     
     def print_product_path(self):
-        #Podobná funkcionalita jako metoda: PrintMaxDepth, jen nevytiskně číslo ale „zanoření“. Příklad výstupu pro produkt A: Product A => Product B => Product G
-        # Vyhledat produkt podle ID
+        if self.root_node is None:
+            print("Operation process not yet finished. Please finish the operation process before printing the tree path.")
+            return
         inp = input("Enter product name: ")
-        for i in Product.products:
-            if i._name == inp:
-                print(i._name)
-                for j in i.ancestors:
-                    print(f"ancestors: {j._name}")
+        for node in self.preorderiter:
+            if node.name == inp:
+                path = [node.name]
+                while node.parent is not None:
+                    node = node.parent
+                    path.append(node.name)
+                path.reverse()
+                print(" => ".join(path))
                 break
+
         
 
     
@@ -580,7 +602,9 @@ class ReceipeTester(NodeMixin):
         #Vytiskne postup do soborů typu txt do složky Output v kořenovém adresáři projektu. 
         #Důležité je, aby se postup načítal z disku. Ukázku výstupů najdete ve zdrojových kódech ve složce Output. Ukázky odpovídají našemu příkladu ze zadání.
         pass
-
+    
+    
+    
 
 receipe_manager = ReceipeMngr()
 receipe_manager.OnBuildReceipeHandler()
