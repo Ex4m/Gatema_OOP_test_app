@@ -149,7 +149,6 @@ class Receipe:
         self.product_pairs = []
         self.unmodified_products = []
         self.operations = []
-        self.root_node = Node("PCB Production Process")
         self.nodes_list = []
         self.pressing_count = 0
             
@@ -254,7 +253,7 @@ class Receipe:
         """
         Creates nodes in the tree representing each step of the operation and appends them to the nodes_list.
         """
-        root_node = self.root_node
+        #root_node = self.root_node
         while True:
             self.num_pairs, self.want_quit = self.inp_num_pairs()
             if self.want_quit:
@@ -303,8 +302,8 @@ class Receipe:
             print("Current products (after operation step)")
             self.show_products()
             if len(Product.products) <= 1:
-                final_node = Node(f"Final Product: {Product.products[0].name}")
-                self.nodes_list.append(final_node)
+                #final_node = Node(f"Final Product: {Product.products[0].name}")
+                #self.nodes_list.append(final_node)
                 print("OPERATION FINISHED, Returning to main menu")
                 break
             next_step = input("Do you want to continue to the next step? (y/n) ")
@@ -360,23 +359,26 @@ class Product(NodeMixin):
     _next_id = 1  # next avaiable id
     products = []
     history = []
-    
+    root_node = None    
+
     def __init__(self, thickness, material):
             self.thickness = thickness
             self.material = material
             self.name = self.generate_name()
             self._id = self.generate_id()
             self.was_used = False
-            self.child = None
-            self.parent = None
+            self.children = []
             #self.products.append(self)
-        
+            if not Product.root_node:
+                Product.root_node = self
     def get_info(self):
         print(f"id: {self._id}, thickness: {self.thickness}, material: {self.material}, name: {self.name}")
     
-    def set_child(self, child):
-        self.child = child
-        child.parent = self
+    def set_child(self, *children):
+        for child in children:
+            self.children.append(child)
+            print(f"Child {child.name} was added to product {self.name}")
+
         
     @property
     def thickness(self):
@@ -431,13 +433,16 @@ class Product(NodeMixin):
                 return new_id
 
     def to_dict(self):
+        children_dicts = [child.to_dict() for child in self.children]
         return {
             "thickness": self.thickness,
             "material": self.material,
             "name": self.name,
             "_id": self._id,
-            "was_used": self.was_used
+            "was_used": self.was_used,
+            "children": children_dicts
         }
+
 
     @classmethod
     def from_dict(cls, product_dict):
@@ -445,27 +450,35 @@ class Product(NodeMixin):
         product.name = product_dict["name"]
         product._id = product_dict["_id"]
         product.was_used = product_dict["was_used"]
+        children_dicts = product_dict["children"]
+        product.children = [Product.from_dict(child_dict) for child_dict in children_dicts]
         return product
+
 
 
         
     
     
 class Operations(NodeMixin):
-        
-    @classmethod
+    
+    @classmethod        
     def add_op_pressing(cls, product1, product2):
         thickness = product1.thickness + product2.thickness
         material = product1.material + "-" + product2.material
         new_product = Product(thickness=thickness, material=material)
         new_product.was_used = True
         Product.products.append(new_product)
-        for i in (product1,product2):
-            new_product.set_child(i)
+        for i in [product1, product2]:
+            try:
+                new_product.set_child(i)
+            except Exception as e:
+                print(f"An error occurred: {e}. product{i}={repr(i)}, new_product={repr(new_product)}")
+
             Product.history.append(i)
             Product.products.remove(i)
         print("Pressing operation done.")
         return new_product
+
     
     @classmethod
     def add_op_laminate(cls, product1, product2):
@@ -506,50 +519,23 @@ class ReceipeTester(NodeMixin):
         self.root_node = None
         self.preorderiter = iterators.PreOrderIter(self.root_node)
         
-    def print_product_tree(self):
-        if len(Product.products) > 1:
-            print("Operation process not yet finished. Please finish the operation process before printing the tree.")
+    """def create_tree(self):
+        if not Product.root_node:
+            print("No products found.")
             return
-            
-        que = input("Do you want to print the full tree? (y/n): ")
-        self.root_node = self.create_tree()
-        if que in responses:
-            for pre, _, node in RenderTree(self.root_node):
-                print(f"{pre}{node.name}")
-                print(f"{pre} parent: {node.parent.name if node.parent else None}")
-                print(f"{pre} children: {[child.name for child in node.children]}\n")
-        else:
-            for pre, _, node in RenderTree(self.root_node):
-                print(f"{pre}{node.name}")
 
-    
-    def create_tree(self):
-        if self.root_node is None:
-            # find the root node in the Product.products list
-            root_product = next((p for p in Product.products if p.name == self.root_node), None)
-            if not root_product:
-                print(f"Root product '{self.root_node}' not found in Product.products")
-                return None
-            
-            # create the root node and add it to the tree
-            self.root_node = Node(root_product.name)
-            
-            # create the rest of the nodes and add them to the tree
-            for node in Product.history:
-                # skip the root node since we already added it
-                if node.name == self.root_node:
-                    continue
-                
-                parent_node = self.root_node
-                for ancestor in node.ancestors:
-                    for child in parent_node.children:
-                        if child.name == ancestor.name:
-                            parent_node = child
-                            break
-                    else:
-                        parent_node = Node(ancestor.name, parent=parent_node)
-                Node(node.name, parent=parent_node)
-        return self.root_node
+        que = input("Do you want to print the full tree? (y/n): ")
+        root_node = Product.root_node
+
+        if que in responses:
+            for pre, _, node in RenderTree(root_node):
+                if node.name != root_node.name:
+                    print(f"{pre}{node.name}")
+                    print(f"{pre} parent: {node.parent.name if node.parent else None}")
+                    print(f"{pre} children: {[child.name for child in node.children]}\n")
+        else:
+            for pre, _, node in RenderTree(root_node):
+                print(f"{pre}{node.name}")"""
 
 
 
