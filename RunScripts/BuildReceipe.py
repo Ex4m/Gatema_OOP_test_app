@@ -10,7 +10,7 @@ from anytree import Node, RenderTree, NodeMixin, iterators
 import string
 import random
 import re
-
+import os
 
 
 class ReceipeMngr:
@@ -70,10 +70,11 @@ At first you will be asked to enter thickness and material of the product.
             print("5. Show me a list of products")
             print("6. Save operation progress to file")
             print("7. Load operation progress from file")
-            print("8. Print Tree (Work in Progress)")
-            print("9. TEST nodes list")
+            print("8. Print Tree")
+            print("9. Print Max depth")
             print("10. Print Pressing count")
-            print("11. Print Product path(Work in Progress)")
+            print("11. Print Product path")
+            print("12. Print Products to file (Work in progress)")
             print("15. Exit")
             print(decorator2)
             choice = input("Enter a number to choose an option: ")
@@ -120,7 +121,7 @@ At first you will be asked to enter thickness and material of the product.
                 input("Press enter key to continue...")  
             
             elif choice == "9":
-                print(self.receipe.nodes_list)
+                print(f"Max depth of the current tree is: {self.receipe_tester.print_max_depth()}")
                 input("Press enter key to continue...")  
             
             elif choice == "10":
@@ -130,6 +131,10 @@ At first you will be asked to enter thickness and material of the product.
             elif choice == "11":
                 print(f"Product path is: {self.receipe_tester.print_product_path()}")
                 input("Press enter key to continue...") 
+            
+            elif choice == "12":
+                self.receipe_tester.print_to_file()
+                input("Press enter key to continue...")
                 
             elif choice == "15":
                 print("Exiting...")
@@ -359,26 +364,23 @@ class Product(NodeMixin):
     _next_id = 1  # next avaiable id
     products = []
     history = []
-    root_node = None    
-
+    
     def __init__(self, thickness, material):
             self.thickness = thickness
             self.material = material
             self.name = self.generate_name()
             self._id = self.generate_id()
             self.was_used = False
-            self.children = []
+            self.child = None
+            self.parent = None
             #self.products.append(self)
-            if not Product.root_node:
-                Product.root_node = self
+        
     def get_info(self):
-        print(f"id: {self._id}, thickness: {self.thickness}, material: {self.material}, name: {self.name}")
+        print(f"id: {self._id}, thickness: {self.thickness}, material: {self.material}, name: {self.name}, child: {self.child}, parent: {self.parent}")
     
-    def set_child(self, *children):
-        for child in children:
-            self.children.append(child)
-            print(f"Child {child.name} was added to product {self.name}")
-
+    def set_child(self, child):
+        self.child = child
+        child.parent = self
         
     @property
     def thickness(self):
@@ -460,25 +462,20 @@ class Product(NodeMixin):
     
     
 class Operations(NodeMixin):
-    
-    @classmethod        
+        
+    @classmethod
     def add_op_pressing(cls, product1, product2):
         thickness = product1.thickness + product2.thickness
         material = product1.material + "-" + product2.material
         new_product = Product(thickness=thickness, material=material)
         new_product.was_used = True
         Product.products.append(new_product)
-        for i in [product1, product2]:
-            try:
-                new_product.set_child(i)
-            except Exception as e:
-                print(f"An error occurred: {e}. product{i}={repr(i)}, new_product={repr(new_product)}")
-
+        for i in (product1,product2):
+            new_product.set_child(i)
             Product.history.append(i)
             Product.products.remove(i)
         print("Pressing operation done.")
         return new_product
-
     
     @classmethod
     def add_op_laminate(cls, product1, product2):
@@ -500,61 +497,95 @@ class Operations(NodeMixin):
             Product.products.remove(product2)
             print("Laminate operation done.")
             return product1
-
-        
-    @classmethod        
-    def add_op_custom(cls, op_name):
-        cls.op_name = op_name
-        print(op_name)
     
  
 
-    
-
-
 
 class ReceipeTester(NodeMixin):
+
+    
     def __init__(self, receipe):
         self.receipe = receipe
         self.root_node = None
+
+    def init_iterator(self):
         self.preorderiter = iterators.PreOrderIter(self.root_node)
         
-    """def create_tree(self):
-        if not Product.root_node:
-            print("No products found.")
+    def print_product_tree(self):
+        if len(Product.products) > 1:
+            print("Operation process not yet finished. Please finish the operation process before printing the tree.")
             return
-
+        self.root_node = self.create_tree() 
         que = input("Do you want to print the full tree? (y/n): ")
-        root_node = Product.root_node
-
         if que in responses:
-            for pre, _, node in RenderTree(root_node):
-                if node.name != root_node.name:
-                    print(f"{pre}{node.name}")
-                    print(f"{pre} parent: {node.parent.name if node.parent else None}")
-                    print(f"{pre} children: {[child.name for child in node.children]}\n")
+            for pre, _, node in RenderTree(self.root_node):
+                print(f"{pre}{node.name}")
+                print(f"{pre} parent: {node.parent.name if node.parent else None}")
+                print(f"{pre} children: {[child.name for child in node.children]}\n")
+            return self.root_node
         else:
-            for pre, _, node in RenderTree(root_node):
-                print(f"{pre}{node.name}")"""
-
-
-
+            for pre, _, node in RenderTree(self.root_node):
+                print(f"{pre}{node.name}")
+            return self.root_node 
     
-    
-    def print_press_count(self):
-        return self.receipe.pressing_count
-
+    def create_tree(self):
+        # find the root node in the Product.products list
+        root_product = Product.products[0]
+            
+        if not root_product:
+            print(f"Root product '{self.root_node}' not found in Product.products")
+            return None
         
+        # create the root node and add the rest of the nodes to the tree
+        self.root_node = Node(root_product.name, parent=None)
+        #print(f"Root node: {self.root_node.name}")
+        for node in Product.history:
+            parent_node = self.root_node
+            for ancestor in node.ancestors:
+                for child in parent_node.children:
+                    if child.name == ancestor.name:
+                        parent_node = child
+                        break
+                else:
+                    if ancestor.name == self.root_node.name:
+                        continue
+                    parent_node = Node(ancestor.name, parent=parent_node)
+                    #print(f"Parent node: {parent_node.name}")
+                
+            # Add a new node only if it's not already in the tree
+            if node.name not in [child.name for child in parent_node.children]:
+                Node(node.name, parent=parent_node)
+                #print(f"Child node: {node.name}")
+        self.init_iterator()
+        return self.root_node
+
+
+    def print_press_count(self):
+        return self.receipe.pressing_count 
     
-    def print_max_depth():
+    def print_max_depth(self):
         #Projde strukturu stromu a vytiskne „počet úrovní“ produktu/postupu (zohlednění operací lisování/laminování).
         #Tzn. na příkladu výše je nejhlouběji produkt A (a C) protože, produkt A je zanořen do Produktu B => Produkt B je zanořen do produktu G => tedy dvě zanoření, výsledek je 2
-        pass
-    
-    def print_product_path(self):
+        #self.init_iterator()
         if self.root_node is None:
-            print("Operation process not yet finished. Please finish the operation process before printing the tree path.")
+            print("Operation process not yet finished. Please finish the operation process and Tree render before printing the tree path.")
             return
+        max_depth = 0
+        stack = [(self.root_node, 1)]
+        while stack:
+            node, depth = stack.pop()
+            if not node.children:
+                max_depth = max(max_depth, depth) - 1
+            for child in node.children:
+                stack.append((child, depth + 1))
+        return max_depth
+    
+
+    def print_product_path(self): 
+        self.init_iterator()
+        if self.root_node is None:
+            print("Operation process not yet finished. Please finish the operation process and Tree render before printing the tree path.")
+            return  
         inp = input("Enter product name: ")
         for node in self.preorderiter:
             if node.name == inp:
@@ -562,9 +593,18 @@ class ReceipeTester(NodeMixin):
                 while node.parent is not None:
                     node = node.parent
                     path.append(node.name)
-                path.reverse()
-                print(" => ".join(path))
-                break
+                f_path = " => ".join(path)
+                return f_path
+        
+        
+        """paths = []
+        for node in self.preorderiter:
+            if node.name == inp:
+                path = self.get_path_to_root(node)
+                paths.append(" => ".join(path[::-1])) # reverse the path to start from the root node
+        return paths"""
+
+    
 
         
 
@@ -584,10 +624,20 @@ class ReceipeTester(NodeMixin):
 
 
         
-    def print_to_file():
+    def print_to_file(self):
         #Vytiskne postup do soborů typu txt do složky Output v kořenovém adresáři projektu. 
         #Důležité je, aby se postup načítal z disku. Ukázku výstupů najdete ve zdrojových kódech ve složce Output. Ukázky odpovídají našemu příkladu ze zadání.
-        pass
+        if not os.path.exists("Output"):
+            os.makedirs("Output")
+            
+        with open("Output/postup.txt", "w") as file:
+            file.write("Postup:\n")
+            for product in Product.history:
+                file.write(f"{product.name}\n")
+            
+
+                
+        print("Output files saved to 'Output' directory.")
     
     
     
